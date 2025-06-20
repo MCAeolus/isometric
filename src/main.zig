@@ -28,6 +28,7 @@ pub fn main() anyerror!void {
     // for mac potentially: rl.FLAG_WINDOW_HIGHDPI
     rl.SetConfigFlags(rl.FLAG_MSAA_4X_HINT);
     rl.InitWindow(State.screen.width, State.screen.height, "main window");
+    rl.SetExitKey(rl.KEY_NULL);
     defer rl.CloseWindow();
 
     State.camera.position = rl.Vector3{ .x = 0.0, .y = 4.0, .z = 7.0 };
@@ -79,6 +80,8 @@ pub fn main() anyerror!void {
     @memset(&bg_offsets, 0);
 
     const letterTexture = rl.LoadTexture("resources/letter.png");
+    const letterBgTexture = rl.LoadTexture("resources/letter_bg.png");
+    const letterInput = rl.LoadFileText("resources/letter.txt");
     var letterSpritePos = rl.Vector3One();
     const letterSpriteMinY = letterSpritePos.y;
     var letterSprite = sprite.NewSprite(letterTexture, 32, 32, 4, 0.2);
@@ -119,8 +122,12 @@ pub fn main() anyerror!void {
         // update camera
 
         State.camera.position.x = rl.Lerp(State.camera.position.x, player.position.x, dt * 1);
-        State.camera.target.x = rl.Lerp(State.camera.position.x, player.position.x, dt * 0.7);
-        // rl.UpdateCamera(&State.camera, rl.CAMERA_ORBITAL);
+        State.camera.position.z = rl.Lerp(State.camera.position.z, player.position.z + State.camera_follow_distance, dt * 1);
+
+        State.camera.target = rl.Vector3Lerp(State.camera.target, rl.Vector3Subtract(player.position, rl.Vector3{ .x = 0, .y = 1, .z = 0 }), dt * 0.9);
+        // State.camera.target.x = rl.Lerp(State.camera.position.x, player.position.x, dt * 0.7);
+        // State.camera.target.z = rl.L
+        //rl.UpdateCamera(&State.camera, rl.CAMERA_ORBITAL);
         //rl.SetShaderValue(lightingShader, lightingShader.locs[rl.SHADER_LOC_VECTOR_VIEW], &State.camera.position.x, rl.SHADER_UNIFORM_VEC3);
 
         // update player velocity, position, sprite keyframes
@@ -171,11 +178,30 @@ pub fn main() anyerror!void {
         if (letterInRange and rl.IsKeyPressed(rl.KEY_I)) {
             letterOpen = true;
         }
+        if (letterOpen and rl.IsKeyPressed(rl.KEY_ESCAPE)) {
+            letterOpen = false;
+        } else if (rl.IsKeyPressed(rl.KEY_ESCAPE)) {
+            break;
+        }
 
         //DRAW SECTION BEGIN
         //draw to rendertex
         rl.BeginTextureMode(renderTexture);
         rl.ClearBackground(rl.BLUE);
+
+        // move parallax here?
+
+        rl.BeginShaderMode(bgShader);
+        for (bg_frame, 0..) |frame, ix| {
+            bgPlaneModel.materials[0].maps[rl.MATERIAL_MAP_DIFFUSE].texture = frame;
+            bg_offsets[ix] += dt * 0.1 / @as(f32, @floatFromInt(ix + 1 * ix + 1));
+            rl.SetShaderValue(bgShader, lBgOffset, &bg_offsets[ix], rl.SHADER_UNIFORM_FLOAT);
+            //const bg_pos = -15.0 + @as(f32, @floatFromInt(ix));
+            // rl.DrawTexture(frame, 0, 0, rl.WHITE);
+            rl.DrawModel(bgPlaneModel, rl.Vector3{ .x = State.camera.position.x, .y = State.camera.position.y - 7, .z = -1 }, 25.0, rl.WHITE);
+        }
+        rl.EndShaderMode();
+
         // const dim = rl.MeasureTextEx(rl.GetFontDefault(), "We did it!", 20, 1.0);
         //const tx: c_int = @as(u32, @floatFromInt(State.screen.width) / 2) - 12;
         //const ty: c_int = @as(u32, @floatFromInt(State.screen.height) / 2) - 12;
@@ -183,13 +209,13 @@ pub fn main() anyerror!void {
         rl.BeginMode3D(State.camera);
 
         // background
-        for (bg_frame, 0..) |frame, ix| {
-            bgPlaneModel.materials[0].maps[rl.MATERIAL_MAP_DIFFUSE].texture = frame;
-            bg_offsets[ix] += dt * 0.1 / @as(f32, @floatFromInt(ix + 1 * ix + 1));
-            rl.SetShaderValue(bgShader, lBgOffset, &bg_offsets[ix], rl.SHADER_UNIFORM_FLOAT);
-            const bg_pos = -15.0 + @as(f32, @floatFromInt(ix));
-            rl.DrawModel(bgPlaneModel, rl.Vector3{ .x = 0, .y = -5.9, .z = bg_pos }, 25.0, rl.WHITE);
-        }
+        // for (bg_frame, 0..) |frame, ix| {
+        //     bgPlaneModel.materials[0].maps[rl.MATERIAL_MAP_DIFFUSE].texture = frame;
+        //     bg_offsets[ix] += dt * 0.1 / @as(f32, @floatFromInt(ix + 1 * ix + 1));
+        //     rl.SetShaderValue(bgShader, lBgOffset, &bg_offsets[ix], rl.SHADER_UNIFORM_FLOAT);
+        //     const bg_pos = -15.0 + @as(f32, @floatFromInt(ix));
+        //     rl.DrawModel(bgPlaneModel, rl.Vector3{ .x = State.camera.position.x, .y = State.camera.position.y - 7, .z = bg_pos }, 25.0, rl.WHITE);
+        // }
 
         for (0..map.width) |x| {
             for (0..map.height) |z| {
@@ -223,10 +249,16 @@ pub fn main() anyerror!void {
         rl.DrawFPS(10, 10);
         drawCenteredText(rl.Vector2{ .x = 60, .y = 60 }, rl.TextFormat("%02.02f,%02.02f", player.position.x, player.position.z), 20, rl.GetFontDefault(), rl.WHITE);
 
-        if (letterInRange) {
+        if (letterInRange and !letterOpen) {
             const screenPosSprite = rl.GetWorldToScreen(rl.Vector3Add(letterSpritePos, rl.Vector3{ .y = 1 }), State.camera);
             //std.debug.print("{d}, {d}\n", .{ screenPosSprite.x, screenPosSprite.y });
             drawCenteredText(screenPosSprite, "Press [I] to Interact", 20, rl.GetFontDefault(), rl.BLUE);
+        }
+
+        if (letterOpen) {
+            // show letter overlay
+            rl.DrawTexture(letterBgTexture, 0, 0, rl.WHITE);
+            rl.DrawText(letterInput, 10, 10, 20, rl.DARKGRAY);
         }
 
         rl.EndTextureMode();

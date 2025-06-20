@@ -8,7 +8,7 @@ const Allocator = std.mem.Allocator;
 
 const Screen = struct { width: c_int, height: c_int };
 
-pub const GameState = struct { screen: Screen = .{ .width = 1920, .height = 1080 }, initialized: bool = false, camera: Raylib.Camera = .{}, gravity: f32 = -0.1 };
+pub const GameState = struct { screen: Screen = .{ .width = 1920 / 2, .height = 1080 / 2 }, initialized: bool = false, camera: Raylib.Camera = .{}, camera_follow_distance: f32 = 7.0, gravity: f32 = -0.1 };
 
 // this must also be updated in lighting.fs
 pub const MaxLights = 64;
